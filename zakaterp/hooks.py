@@ -102,13 +102,12 @@ app_license = "MIT"
 # ---------------
 # Hook on document methods and events
 
-# doc_events = {
-#	"*": {
-#		"on_update": "method",
-#		"on_cancel": "method",
-#		"on_trash": "method"
-#	}
-# }
+doc_events = {
+	"Sales Invoice": {
+		"validate": ["zakaterp.custom_script.sales_invoice.sales_invoice.validate"],
+        "on_submit":"zakaterp.custom_script.sales_invoice.sales_invoice.on_submit",
+	},
+}
 
 # Scheduled Tasks
 # ---------------
