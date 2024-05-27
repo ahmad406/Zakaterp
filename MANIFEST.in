@@ -1,0 +1,18 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.py
+include *.txt
+recursive-include zakaterp *.css
+recursive-include zakaterp *.csv
+recursive-include zakaterp *.html
+recursive-include zakaterp *.ico
+recursive-include zakaterp *.js
+recursive-include zakaterp *.json
+recursive-include zakaterp *.md
+recursive-include zakaterp *.png
+recursive-include zakaterp *.py
+recursive-include zakaterp *.svg
+recursive-include zakaterp *.txt
+recursive-exclude zakaterp *.pyc

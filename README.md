@@ -1,0 +1,7 @@
+## zakaterp
+
+zakat
+
+#### License
+
+MIT
