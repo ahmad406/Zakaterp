@@ -15,13 +15,12 @@ def resubmit_submit(inv):
 def before_submit(doc,method=None,resubmit=0):
 	import requests
 	import json
-	url = "https://zakatdev.etoserp.com/api/method/stand_alone.api.send_zakat"
 	data = {}
 	data["is_customer_address"] = False
 	data["zatca_status"] = doc.zatca_status
 	data["resubmit_zatca"] = resubmit
 	if doc.bill_type=="B2B" and not doc.delivery_date:
-		 frappe.throw("Delivery Date is missing..")
+			frappe.throw("Delivery Date is missing..")
 
 	if doc.customer_address:
 		add = frappe.get_doc("Address", doc.customer_address)
@@ -79,18 +78,37 @@ def before_submit(doc,method=None,resubmit=0):
 	#     data["grand_total"]=round(doc.net_total+doc.total_taxes_and_charges,2)
 	data["base_total_taxes_and_charges"]=flt(abs(float((doc.zatca_taxamount*doc.conversion_rate))) ,2)
 
-	
-		 
-		 
+
+			
+			
 	data["rounding_adjustment"]=((doc.rounding_adjustment))
+	token=None
+	url=None
+	if doc.company=="ARKAN BARWAH CONTRACTING EST":
+		token="token 15a67b38e5fe7f6:097b5b51793aeb9"
+		url ="https://arkan.zakat.etoserp.com/api/method/stand_alone.api.send_zakat"
 
 
+	if doc.company=="ARKAN BARWAH Est. FOR THE TRANSPORTATION OF GOODS":
+		url = "https://palmlogistics.zakat.etoserp.com/api/method/stand_alone.api.send_zakat"
+		token="token 0e76b7b591d4c4b:d21ab6425f08835"
+
+	if doc.company=="FREIGHT WORLD AL OFI CO., OPC":
+		url = "https://zakat.freightworld.etoserp.com/api/method/stand_alone.api.send_zakat"
+		token="token 10079d58801d2d2:097b5b51793aeb9"
+
+
+
+	if not token:
+		frappe.throw("Token Missing")
 	json_data = json.dumps({"data": data}, default=str)
 	headers = {
-	'Authorization': 'token 10079d58801d2d2:ac8ed32f47f89f7',
+	'Authorization':token,
 	'Content-Type': 'application/json',
 	'Cookie': 'sid=Guest'
 	}
+
+
 	response = requests.request("POST",url, headers=headers, data=json_data)
 	res=json.loads(response.text)
 	filename = "{0}_signed.xml".format(doc.name)
@@ -102,11 +120,11 @@ def before_submit(doc,method=None,resubmit=0):
 		if res["message"].get("clearanceStatus")=="NOT_CLEARED":
 			doc.db_set("zatca_status","Clearance Failed",update_modified=False)
 			updated=1
-			frappe.msgprint("Clearance Failed")
+			frappe.throw("Clearance Failed")
 		elif res["message"].get("reportingStatus")=="NOT_REPORTED":
 			doc.db_set("zatca_status","Reporting Failed",update_modified=False)
 			updated=1
-			frappe.msgprint("Reporting Failed")
+			frappe.throw("Reporting Failed")
 		if updated==0:
 			if res["message"]["Status"]=="CLEARED":
 				doc.db_set("zatca_status","CLEARED",update_modified=False)
@@ -142,7 +160,7 @@ def before_submit(doc,method=None,resubmit=0):
 	else:
 		if res["message"]==0:
 			doc.db_set("zatca_status","Reporting Failed",update_modified=False)
-			frappe.msgprint("Reporting Failed")
+			frappe.throw("Reporting Failed")
 		else:
 			if res["message"]["res"]["reportingStatus"]=="REPORTED":
 				doc.db_set("zatca_status","REPORTED",update_modified=False)
