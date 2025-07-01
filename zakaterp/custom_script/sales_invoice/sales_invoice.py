@@ -11,93 +11,119 @@ def resubmit_submit(inv):
 	else:
 		before_submit(doc,resubmit=1,method=None)
 
-@frappe.whitelist()
-def before_submit(doc,method=None,resubmit=0):
+frappe.whitelist()
+def before_submit(doc, method=None, resubmit=0):
 	import requests
-	import json
-	data = {}
-	data["is_customer_address"] = False
-	data["zatca_status"] = doc.zatca_status
-	data["resubmit_zatca"] = resubmit
-	if doc.bill_type=="B2B" and not doc.delivery_date:
-			frappe.throw("Delivery Date is missing..")
+	data = {
+		"is_customer_address": False,
+		"zatca_status": doc.zatca_status,
+		"resubmit_zatca": resubmit,
+		"company": "ALMATALIQ ALRAQIAH TRADING EST",
+		"name": doc.name,
+		"posting_date": doc.posting_date,
+		"posting_time": doc.posting_time,
+		"total_taxes_and_charges": round(doc.total_taxes_and_charges, 2),
+		"net_total": round(doc.net_total, 2),
+		"total": round(doc.total, 2),
+		"grand_total": round(doc.grand_total, 2),
+		"ref": doc.return_against,
+		"customer": doc.customer,
+		"customer_name": doc.customer_name,
+		"actual_delivery_date": doc.delivery_date,
+		"due_date": doc.due_date,
+		"currency": doc.currency,
+		"items": [],
+		"rounding_adjustment": doc.rounding_adjustment
+	}
+
+	if frappe.db.get_value('Customer', doc.customer, 'bill_type') == "B2B" and not doc.delivery_date:
+		frappe.throw("Delivery Date is missing.")
 
 	if doc.customer_address:
 		add = frappe.get_doc("Address", doc.customer_address)
-		data["city"] = add.city
-		data["pin_code"] = add.pincode
-		data["state"] = add.state
-		data["street"] = add.address_line1
-		data["building_no"] = add.building_no
-		data["plot_id_no"] = add.plot_id_no
-		data['city_subdivision_name']=add.city_subdivision_name
-		data["is_customer_address"]=True
-	data["company"] = doc.company
-	data["crn"] = frappe.db.get_value('Customer', doc.customer, 'crn')
+		data.update({
+			"country_code": (frappe.db.get_value('Country', add.country, 'code') or 'SA').upper(),
+			"city": add.city,
+			"pin_code": add.pincode,
+			"state": add.state,
+			"street": add.address_line1,
+			"building_no": add.building_no,
+			"plot_id_no": add.plot_id_no,
+			"city_subdivision_name": add.city_subdivision_name,
+			"is_customer_address": True
+		})
+		if get_length_count(add.pincode) != 5:
+			frappe.throw("Incorrect Customer Postal Code")
+
+	crn_custom = frappe.db.get_value('Customer', doc.customer, 'crn')
+	if get_length_count(crn_custom) != 10:
+		frappe.throw("Incorrect Customer CRN")
+	data["crn"] = crn_custom
 	data["customer_tax_id"] = frappe.db.get_value('Customer', doc.customer, 'tax_id')
-	data["actual_delivery_date"] = doc.delivery_date
-	data["due_date"] = doc.due_date
-	data['customer']=doc.customer
-	data['customer_name']=doc.customer_name
-	data["name"] = doc.name
-	data["posting_date"] = doc.posting_date
-	data["posting_time"] = doc.posting_time
-	data["total_taxes_and_charges"]=round(doc.total_taxes_and_charges ,2)
-	data["net_total"]=round(doc.net_total ,2)
-	data["total"]=round(doc.total ,2)
-	data["grand_total"]=round(doc.grand_total ,2)
-	data["ref"] = doc.return_against
-	if doc.apply_discount_on=='Grand Total' and doc.discount_amount>0:
-		frappe.throw("Discount can't be applied on  Grand Total")
-	data["items"] = []
+
+	if doc.apply_discount_on == 'Grand Total' and doc.discount_amount > 0:
+		frappe.throw("Discount can't be applied on Grand Total")
+
+	data["invoice_type"] = "Credit Note" if doc.is_return else "Invoice"
+	data["bill_type"] = frappe.db.get_value('Customer', doc.customer, 'bill_type')
+
+	# Tax info mapping
+	tx_rate = 0.0
+
 	for item in doc.items:
-		data["items"].append(item.as_dict())
-		tx_rate=0
-		for idx,f in enumerate(doc.taxes):
-			if frappe.db.get_value('Account', f.account_head, 'account_type')=="Tax":
-				for item_code, (rate, amount) in   json.loads(doc.taxes[idx].item_wise_tax_detail).items():
-					if item_code==item.item_code:
-								data["items"][(item.idx-1)].taxes_amount=(round(abs(float(amount)) , 2)) 
-								data["items"][(item.idx-1)].taxes_percentage= (round(abs(float(rate)) , 2)) 
-								tx_rate= abs(float(rate))
-				data["vat_rate"]=tx_rate
-			else:
-				data["additional_charge"]=round(abs(float(f.tax_amount)) ,2)
-	if doc.is_return:
-		data["invoice_type"] ="Credit Note"
-	else:
-		data["invoice_type"]="Invoice"
-	data["bill_type"]=doc.bill_type
-	data["additional_charge"]=round(abs(float(doc.zatca_additional)) ,2)
-	data["total_taxes_and_charges"]=round(abs(doc.zatca_taxamount) ,2)
-	data["discount"]=round(abs((doc.zatca_discount)),2)
-	data["total"]=round(doc.rounded_total ,2) if round(doc.rounded_total ,2) else round(doc.grand_total ,2)
-	data["currency"]=doc.currency
-	# if doc.rounded_total==doc.grand_total and doc.rounding_adjustment!=0:
-	#     # data["grand_total"]=round(doc.rounded_total-doc.rounding_adjustment,2)
-	#     data["grand_total"]=round(doc.net_total+doc.total_taxes_and_charges,2)
-	data["base_total_taxes_and_charges"]=flt(abs(float((doc.zatca_taxamount*doc.conversion_rate))) ,2)
+		itm = item.as_dict()
+		itm["taxes_amount"] = 0.0
+		itm["taxes_percentage"] = 0.0
+		itm["additional_charges"] = 0.0
+		itm["discount"] = 0.0
 
+		for tax in doc.taxes:
+			if not tax.custom_item_wise_tax_detail:
+				continue
 
-			
-			
-	data["rounding_adjustment"]=((doc.rounding_adjustment))
+			tax_detail = json.loads(tax.custom_item_wise_tax_detail)
+
+			if str(item.idx) in tax_detail:
+				rate, amount, row_id, item_name = tax_detail[str(item.idx)]
+				if item_name == item.item_name:  # Extra check to ensure same item
+					if frappe.db.get_value('Account', tax.account_head, 'account_type') == "Tax":
+						itm["taxes_amount"] = flt(abs(float(amount)), 2)
+						itm["taxes_percentage"] = flt(abs(float(rate)), 2)
+						tx_rate = abs(float(rate))
+						if itm["taxes_percentage"] == 0:
+							itm["tax_code"] = item.vat_exemption_reason_code
+							itm["exempt_reason"] = item.vat_category
+							itm["tax_category"] = item.vat_category_code
+							if not item.vat_exemption_reason_code:
+								frappe.throw("Tax code missing in row {}".format(item.idx))
+
+							if not item.vat_category:
+								frappe.throw("Exempt Reason missing in row {}".format(item.idx))
+
+					else:
+						if amount > 0:
+							itm["additional_charges"] += flt(abs(float(amount)), 2)
+						else:
+							itm["discount"] += flt(abs(float(amount)), 2)
+
+		data["items"].append(itm)
+
+	data["vat_rate"] = tx_rate
+	data["additional_charge"] = round(abs(float(doc.zatca_additional)), 2)
+	data["total_taxes_and_charges"] = round(abs(doc.zatca_taxamount), 2)
+	data["discount"] = round(abs(doc.zatca_discount), 2)
+	data["total"] = round(doc.rounded_total, 2) if doc.rounded_total else round(doc.grand_total, 2)
+	data["base_total_taxes_and_charges"] = flt(abs(float(doc.zatca_taxamount * doc.conversion_rate)), 2)
+	data["net_total"] =round(doc.net_total, 2)
+	if  len(doc.taxes) >1:
+		for k in doc.taxes:
+				if frappe.db.get_value('Account', k.account_head, 'account_type')=="Tax" and abs(k.tax_amount) > 0:
+					data["net_total"] =abs(flt((float(k.total-k.tax_amount)) , 2))
 	token=None
 	url=None
-	if doc.company=="ARKAN BARWAH CONTRACTING EST":
-		token="token 15a67b38e5fe7f6:097b5b51793aeb9"
-		url ="https://arkan.zakat.etoserp.com/api/method/stand_alone.api.send_zakat"
-
-
-	if doc.company=="ARKAN BARWAH Est. FOR THE TRANSPORTATION OF GOODS":
-		url = "https://palmlogistics.zakat.etoserp.com/api/method/stand_alone.api.send_zakat"
-		token="token 0e76b7b591d4c4b:d21ab6425f08835"
-
-	if doc.company=="FREIGHT WORLD AL OFI CO., OPC":
-		url = "https://zakat.freightworld.etoserp.com/api/method/stand_alone.api.send_zakat"
-		token="token 10079d58801d2d2:097b5b51793aeb9"
-
-
+	if doc.company=="M. RAQIYA EST.":
+		token="token b83c9c3016ca58f:31d13cc3a1dae21"
+		url ="https://zakat.raqiya.etoserp.com/api/method/stand_alone.api.send_zakat"
 
 	if not token:
 		frappe.throw("Token Missing")
@@ -115,7 +141,7 @@ def before_submit(doc,method=None,resubmit=0):
 	doctype = doc.doctype
 	docname = doc.name 
 	folder = 'Home/Attachments' 
-	if doc.bill_type=="B2B":
+	if frappe.db.get_value('Customer', doc.customer, 'bill_type')=="B2B":
 		updated=0
 		if res["message"].get("clearanceStatus")=="NOT_CLEARED":
 			doc.db_set("zatca_status","Clearance Failed",update_modified=False)
@@ -268,7 +294,8 @@ def validate_multiple_tax(self):
 
 
 
-# def get_length_count(data):
-# 	import re
-# 	count = len(re.findall(r'\d', data))
-# 	return(count)
+def get_length_count(data):
+	import re
+	count = len(re.findall(r'\d', data))
+	return(count)
+
