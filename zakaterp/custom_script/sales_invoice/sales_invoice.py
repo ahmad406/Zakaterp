@@ -123,7 +123,7 @@ def before_submit(doc, method=None, resubmit=0):
 	url=None
 	if doc.company=="M. RAQIYA EST.":
 		token="token b83c9c3016ca58f:31d13cc3a1dae21"
-		url ="https://zakat.raqiya.etoserp.com/api/method/stand_alone.api.send_zakat"
+		url ="https://zakat.com/api/method/stand_alone.api.send_zakat"
 
 	if not token:
 		frappe.throw("Token Missing")
