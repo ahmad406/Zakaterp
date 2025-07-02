@@ -106,7 +106,7 @@ doc_events = {
 	"Sales Invoice": {
 		"validate": ["zakaterp.custom_script.sales_invoice.sales_invoice.validate"],
         "before_submit":"zakaterp.custom_script.sales_invoice.sales_invoice.before_submit",
-        # "before_cancel": "zakaterp.custom_script.sales_invoice.sales_invoice.oncancel"
+        "before_cancel": "zakaterp.custom_script.sales_invoice.sales_invoice.oncancel"
 	},
 }
 
