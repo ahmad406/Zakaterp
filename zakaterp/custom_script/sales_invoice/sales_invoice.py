@@ -4,6 +4,10 @@ import base64
 from frappe.utils.data import flt
 
 @frappe.whitelist()
+def oncancel(doc, method=None):
+    frappe.throw("As per Zakat regulations, invoice cancellation is not permitted.")
+
+@frappe.whitelist()
 def resubmit_submit(inv):
 	doc=frappe.get_doc("Sales Invoice",inv)
 	if doc.docstatus!=1:
